@@ -1,0 +1,44 @@
+<launch>
+	<group ns="flowers">
+		<node pkg="copy_when_uncertain" type="flower.py" name="flower_1">
+			<param name="flower_id" value="1"/>
+			<param name="prob_r0" value="0.2"/>
+			<param name="prob_r1" value="0.6"/>
+			<param name="prob_r2" value="0.2"/>
+			<param name="reward_change_freq" value="10" type="int"/>
+		</node>
+		<node pkg="copy_when_uncertain" type="flower.py" name="flower_2">
+			<param name="flower_id" value="2"/>
+			<param name="prob_r0" value="0.2"/>
+			<param name="prob_r1" value="0.6"/>
+			<param name="prob_r2" value="0.2"/>
+			<param name="reward_change_freq" value="10" type="int"/>
+		</node>
+		<node pkg="copy_when_uncertain" type="flower.py" name="flower_3">
+			<param name="flower_id" value="3"/>
+			<param name="prob_r0" value="0.2"/>
+			<param name="prob_r1" value="0.6"/>
+			<param name="prob_r2" value="0.2"/>
+			<param name="reward_change_freq" value="10" type="int"/>
+		</node>
+	</group>
+
+	<group ns="bees">
+		<node pkg="copy_when_uncertain" type="bee.py" name="bee_1">
+			<param name="bee_id" value="1" type="int"/>
+		</node>
+		<node pkg="copy_when_uncertain" type="bee.py" name="bee_2">
+			<param name="bee_id" value="2" type="int"/>
+		</node>
+		<node pkg="copy_when_uncertain" type="bee.py" name="bee_3">
+			<param name="bee_id" value="3" type="int"/>
+		</node>
+		<node pkg="copy_when_uncertain" type="bee.py" name="bee_4">
+			<param name="bee_id" value="4" type="int"/>
+		</node>
+		<node pkg="copy_when_uncertain" type="bee.py" name="bee_5">
+			<param name="bee_id" value="5" type="int"/>
+		</node>
+	</group>
+	<node pkg="copy_when_uncertain" type="environment_updater.py" name="environment_updater"/>
+</launch>         
