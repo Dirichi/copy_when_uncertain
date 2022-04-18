@@ -1,0 +1,7 @@
+int64 tick_id
+copy_when_uncertain/BeeUpdate[] bee_updates
+
+---
+
+int64 tick_id
+copy_when_uncertain/BeeInit[] bee_inits

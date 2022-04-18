@@ -9,6 +9,10 @@ BEE_UPDATE_TOPIC = "bee_updated"
 OUTCOME_PROCESSED_TOPIC = "outcome_processed"
 NAME = "bee"
 
+EXPLORE = 0
+EXPLOIT = 1
+OBSERVE = 2
+
 class Bee():
 	def __init__(self, bee_id, gene, publisher, outcome_processed_publisher):
 		self.id = bee_id
@@ -20,11 +24,12 @@ class Bee():
 		self.num_ticks = 0
 		self.expected_rewards_by_flower_id = {}
 
-	def restart(gene):
+	def restart(self, gene):
 		self.gene = gene
 		self.num_ticks = 0
 		self.cumulative_reward = 0
 		self.gene_cursor = 0
+		self.expected_rewards_by_flower_id = {flower: 0.0 for flower in self.expected_rewards_by_flower_id}
 		
 
 	def update(self, tick):
@@ -38,7 +43,10 @@ class Bee():
 				'bee_id': self.id,
 				'tick_id': tick_id, 
 				'action': action,
-				'target_flower_id': self.get_target_flower(action)
+				'target_flower_id': self.get_target_flower(action),
+				'num_ticks': self.num_ticks,
+				'gene': self.gene,
+				'total_reward': self.cumulative_reward
 			}
 		if (tick_id % 100 == 0):
 			rospy.loginfo("Bee status update: %s", status)	
@@ -55,12 +63,23 @@ class Bee():
 		if len(rewards) == 0:
 			return -1
 
-		if action == 1: 
+		if action == EXPLOIT: 
+			if len(set(rewards.values())) == 1:
+				return random.sample(rewards.keys(), 1)[0]
+
 			return max(rewards, key=rewards.get)
 
 		return -1
 
 	def process_outcome(self, outcome_data):
+		if outcome_data.bee_id != self.id:
+			return
+
+		if outcome_data.reset:
+			self.restart(outcome_data.gene)
+			self.outcome_processed_publisher.publish(ActionOutcomeProcessed(self.id))
+			return
+
 		self.cumulative_reward += outcome_data.received_reward
 		flower = outcome_data.observed_flower_id
 		if flower != -1:

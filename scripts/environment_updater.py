@@ -3,7 +3,7 @@
 import rospy
 import random
 from copy_when_uncertain.msg import BeeUpdate, FlowerUpdate, BeeAlive, FlowerAlive, ActionOutcome, ActionOutcomeProcessed
-
+from copy_when_uncertain.srv import Evolve, EvolveRequest, RecordGeneration, RecordGenerationRequest
 from std_msgs.msg import Int64
 import copy
 
@@ -36,6 +36,8 @@ class ActionOutcomeCalculator():
 			'received_reward': rewards['received'],
 			'observed_flower_id': flower['id'],
 			'observed_reward': rewards['expected'],
+			'reset': False,
+			'gene': []
 		}
 		return  ActionOutcome(**outcome)
 
@@ -102,11 +104,12 @@ class ActionOutcomeCalculator():
 		
 	
 class EnvironmentUpdater():
-	def __init__(self, bee_publisher, flower_publisher, tick_completed_publisher, outcome_publisher):
-		self.bee_publisher = bee_publisher
-		self.flower_publisher = flower_publisher
-		self.tick_completed_publisher = tick_completed_publisher
-		self.outcome_publisher = outcome_publisher
+	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq):
+		self.bee_publisher = bee_pub
+		self.flower_publisher = flower_pub
+		self.tick_completed_publisher = tick_completed_pub
+		self.outcome_publisher = outcome_pub
+		self.evolution_frequency = evolution_freq 
 		self.flower_updates = {}
 		self.flower_ids = set([])
 		self.bee_updates = {}
@@ -115,10 +118,20 @@ class EnvironmentUpdater():
 		self.n_flowers = 3
 		self.n_bees = 5
 		self.outcome_calculator = ActionOutcomeCalculator(0.1)
-		self.bee_ids_with_unprocessed_outcomes = set([])
+		self.processed_outcome_ids = set([])
+		self.tick_rate = rospy.Rate(0.5)
+		self.tick_outcome_published = False
+		self.update_bees_published = False
+		self.tick_completed = False
 	
 	def tick(self, tick):
+		self.bee_updates = {}
+		self.flower_updates = {}
+		self.processed_outcome_ids = set([])
 		self.tick_id = tick.data + 1
+		self.tick_outcome_published = False
+		self.update_bees_published = False
+		self.tick_completed = False
 		rospy.loginfo("Running tick %s", self.tick_id)
 		self.update_flowers()
 
@@ -128,9 +141,9 @@ class EnvironmentUpdater():
 
 	def receive_flower_update(self, flower_data):
 		rospy.loginfo("Received update from flower with id: %s", flower_data.flower_id)
-		old_updates = copy.deepcopy(self.flower_updates)
 		self.flower_updates[flower_data.flower_id] = flower_data
-		if self.updates_just_completed(old_updates, self.flower_updates, self.n_flowers):
+		if len(self.flower_updates.keys()) == self.n_flowers and not self.update_bees_published:
+			self.update_bees_published = True
 			rospy.loginfo("Flower updates just completed. Starting bee updates")
 			self.update_bees()
 
@@ -140,9 +153,9 @@ class EnvironmentUpdater():
 
 	def receive_bee_update(self, bee_data):
 		rospy.loginfo("Received update from bee with id: %s", bee_data.bee_id)
-		old_updates = copy.deepcopy(self.bee_updates)
 		self.bee_updates[bee_data.bee_id] = bee_data
-		if self.updates_just_completed(old_updates, self.bee_updates, self.n_bees):
+		if len(self.bee_updates.keys()) == self.n_bees and not self.tick_outcome_published:
+			self.tick_outcome_published = True
 			rospy.loginfo("Bee actions for tick: %s completed", self.tick_id)
 			self.publish_outcomes()
 	
@@ -156,39 +169,71 @@ class EnvironmentUpdater():
 		return len(self.bee_ids) == self.n_bees and len(self.flower_ids) == self.n_flowers
 	
 	def publish_outcomes(self):
+		outcomes = self.build_outcomes()
+		self.processed_outcome_ids = set([])
 		rospy.loginfo("Publishing outcomes for tick: %s", self.tick_id)
-		outcomes = self.outcome_calculator.calculate(self.bee_updates, self.flower_updates)
-		self.bee_ids_with_unprocessed_outcomes = self.bee_ids.copy()
 		for outcome in outcomes:
 			self.outcome_publisher.publish(outcome)
+
+	def build_outcomes(self):
+		outcomes = self.outcome_calculator.calculate(self.bee_updates, self.flower_updates)
+		bee_inits_by_id = {}
+		if (self.tick_id > 0 and (self.tick_id % self.evolution_frequency == 0)):
+			rospy.loginfo("Running evolution at tick_id: %s", self.tick_id)
+			bee_inits = self.evolve_bees()
+			for init in bee_inits:
+				bee_inits_by_id[init.bee_id] = init
+		
+		for outcome in outcomes:
+			bee_init = bee_inits_by_id.get(outcome.bee_id, None)
+			if bee_init:
+				outcome.reset = True
+				outcome.gene = bee_init.gene
+		return outcomes
 
 	def receive_outcome_processed(self, outcome_processed_data):
 		bee_id = outcome_processed_data.bee_id
 		rospy.loginfo("Outcomes processed for bee: %s at tick: %s", bee_id, self.tick_id)
-		self.bee_ids_with_unprocessed_outcomes.remove(bee_id)
-		rospy.loginfo("Unprocessed outcome ids: %s", self.bee_ids_with_unprocessed_outcomes)
-		if len(self.bee_ids_with_unprocessed_outcomes) == 0:
+		self.processed_outcome_ids.add(bee_id)
+		rospy.loginfo("Processed outcome ids: %s", self.processed_outcome_ids)
+		if len(self.processed_outcome_ids) == self.n_bees and not self.tick_completed:
+			self.tick_completed = True
+			rospy.loginfo("All action outcomes for tick: %s processed", self.tick_id)
+			rospy.loginfo("Tick: %s completed", self.tick_id)
 			self.tick_completed_publisher.publish(Int64(self.tick_id))
-			
 
-	def updates_just_completed(self, old_v, new_v, n_objs):
-		return (not self.updates_complete(old_v, n_objs)) and self.updates_complete(new_v, n_objs)
+	def evolve_bees(self):
+		rospy.loginfo("Beginning evolution process at tick_id: %s", self.tick_id)
+		rospy.wait_for_service('evolve')
+		try:
+			run_evolve = rospy.ServiceProxy('evolve', Evolve)
+			request = EvolveRequest(bee_updates=self.bee_updates.values(), tick_id=self.tick_id)
+			rospy.loginfo("Completed evolution process")
+			return run_evolve(request).bee_inits
+		except rospy.ServiceException as e:
+			rospy.logerr("Evolution service call failed: %s", e)
+		return []
 
-	def updates_complete(self, updates_hash, n_objs):
-		updates = updates_hash.values()
-		if len(updates) < n_objs:
-			return False
+	def record_generation(self):
+		rospy.loginfo("Recording generation at tick_id: ", self.tick_id)
+		rospy.wait_for_service('record_generation')
+		try:
 
-		tick_ids = set([update.tick_id for update in updates])
-		return len(tick_ids) == 1 and self.tick_id in tick_ids
+			record = rospy.ServiceProxy('record_generation', RecordGeneration)
+			request = RecordGenerationRequest(bee_updates=self.bee_updates.values(), tick_id=self.tick_id)
+			record(request)
+		except rospy.ServiceException as e:
+			rospy.logerr("Record service call failed: %s", e)
+
+
 
 def start_environment_node():
 	bee_pub = rospy.Publisher(UPDATE_BEES_TOPIC, Int64, queue_size=10, latch=True)
 	flower_pub = rospy.Publisher(UPDATE_FLOWERS_TOPIC, Int64, queue_size=10, latch=True)
 	tick_pub = rospy.Publisher(TICK_COMPLETED_TOPIC, Int64, queue_size=10, latch=True)
 	outcome_pub = rospy.Publisher(OUTCOME_TOPIC, ActionOutcome, queue_size=10, latch=True)
-	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub)
 	rospy.init_node(NAME, anonymous=True)
+	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=100, max_ticks=10000)
 	rospy.Subscriber("/bees/bee_updated", BeeUpdate, env.receive_bee_update)
 	rospy.Subscriber("/flowers/flower_updated", FlowerUpdate, env.receive_flower_update)
 	rospy.Subscriber("/bees/bee_alive", BeeAlive, env.receive_bee_alive)

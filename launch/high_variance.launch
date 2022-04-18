@@ -2,24 +2,24 @@
 	<group ns="flowers">
 		<node pkg="copy_when_uncertain" type="flower.py" name="flower_1">
 			<param name="flower_id" value="1"/>
-			<param name="prob_r0" value="0.0"/>
-			<param name="prob_r1" value="1.0"/>
-			<param name="prob_r2" value="0.0"/>
-			<param name="prob_reward_change" value="0" type="float"/>
+			<param name="prob_r0" value="0.33"/>
+			<param name="prob_r1" value="0.34"/>
+			<param name="prob_r2" value="0.33"/>
+			<param name="prob_reward_change" value="0.05" type="float"/>
 		</node>
 		<node pkg="copy_when_uncertain" type="flower.py" name="flower_2">
 			<param name="flower_id" value="2"/>
-			<param name="prob_r0" value="0.0"/>
-			<param name="prob_r1" value="1.0"/>
-			<param name="prob_r2" value="0.0"/>
-			<param name="prob_reward_change" value="0" type="int"/>
+			<param name="prob_r0" value="0.33"/>
+			<param name="prob_r1" value="0.34"/>
+			<param name="prob_r2" value="0.33"/>
+			<param name="prob_reward_change" value="0.05" type="int"/>
 		</node>
 		<node pkg="copy_when_uncertain" type="flower.py" name="flower_3">
 			<param name="flower_id" value="3"/>
-			<param name="prob_r0" value="0.0"/>
-			<param name="prob_r1" value="1.0"/>
-			<param name="prob_r2" value="0.0"/>
-			<param name="prob_reward_change" value="0" type="float"/>
+			<param name="prob_r0" value="0.33"/>
+			<param name="prob_r1" value="0.34"/>
+			<param name="prob_r2" value="0.33"/>
+			<param name="prob_reward_change" value="0.05" type="float"/>
 		</node>
 	</group>
 

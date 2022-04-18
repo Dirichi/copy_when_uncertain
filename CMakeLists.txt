@@ -55,15 +55,15 @@ find_package(catkin REQUIRED COMPONENTS
    FlowerAlive.msg
    ActionOutcome.msg
    ActionOutcomeProcessed.msg
+   BeeInit.msg
  )
 
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+ add_service_files(
+   FILES
+   Evolve.srv
+ )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -168,6 +168,7 @@ include_directories(
    scripts/bee.py
    scripts/flower.py
    scripts/environment_updater.py
+   scripts/evolve_server.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 
