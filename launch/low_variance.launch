@@ -5,7 +5,7 @@
 			<param name="prob_r0" value="0.0"/>
 			<param name="prob_r1" value="1.0"/>
 			<param name="prob_r2" value="0.0"/>
-			<param name="prob_reward_change" value="0" type="float"/>
+			<param name="prob_reward_change" value="0" type="double"/>
 		</node>
 		<node pkg="copy_when_uncertain" type="flower.py" name="flower_2">
 			<param name="flower_id" value="2"/>
@@ -19,7 +19,7 @@
 			<param name="prob_r0" value="0.0"/>
 			<param name="prob_r1" value="1.0"/>
 			<param name="prob_r2" value="0.0"/>
-			<param name="prob_reward_change" value="0" type="float"/>
+			<param name="prob_reward_change" value="0" type="double"/>
 		</node>
 	</group>
 
@@ -42,4 +42,7 @@
 	</group>
 	<node pkg="copy_when_uncertain" type="environment_updater.py" name="environment_updater"/>
 	<node pkg="copy_when_uncertain" type="evolve_server.py" name="evolve_server"/>
+	<node pkg="copy_when_uncertain" type="record_generation_server.py" name="record_generation_server">
+		<param name="filename_prefix" value="low_variance"/>
+	</node>
 </launch>         

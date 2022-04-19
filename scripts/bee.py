@@ -49,7 +49,7 @@ class Bee():
 				'total_reward': self.cumulative_reward
 			}
 		if (tick_id % 100 == 0):
-			rospy.loginfo("Bee status update: %s", status)	
+			rospy.logdebug("Bee status update: %s", status)	
 		update = BeeUpdate(**status)
 		self.publisher.publish(update)
 

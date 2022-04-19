@@ -17,7 +17,7 @@ class EvolveServer():
 		self.prob_mutation = prob_mutation
 
 	def handle_request(self, request):
-		rospy.loginfo("Handling evolve request at tick_id: %s", request.tick_id)
+		rospy.logdebug("Handling evolve request at tick_id: %s", request.tick_id)
 		bees = request.bee_updates
 		self.log_progress(bees)
 		children = self.evolve(bees)
@@ -26,7 +26,7 @@ class EvolveServer():
 			new_bee = self.build_bee(bees[i].bee_id, children[i])
 			new_generation.append(new_bee)
 		
-		rospy.loginfo("Completed evolution. New generation: %s", new_generation)
+		rospy.logdebug("Completed evolution. New generation: %s", new_generation)
 		return EvolveResponse(bee_inits=new_generation, tick_id=request.tick_id)
 
 	def evolve(self, population):
@@ -79,15 +79,15 @@ class EvolveServer():
 		
 	def log_progress(self, bees):
 		fittest_bee = max(bees, key=lambda b: self.fitness(b))
-		rospy.loginfo("Fittest bee: %s", fittest_bee.gene)
-		rospy.loginfo("Fittest bee score: %s", self.fitness(fittest_bee))
+		rospy.logdebug("Fittest bee: %s", fittest_bee.gene)
+		rospy.logdebug("Fittest bee score: %s", self.fitness(fittest_bee))
 
 
 def start_server():
 	server = EvolveServer(tournament_ratio=0.4, prob_recombination=0.9, gene_cardinality=3, prob_mutation=0.1)
 	rospy.init_node(NAME)
 	rospy.Service("evolve", Evolve, server.handle_request)
-	rospy.loginfo("Ready to evolve bees")
+	rospy.logdebug("Ready to evolve bees")
 	rospy.spin()
 
 if __name__ == "__main__":

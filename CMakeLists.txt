@@ -63,6 +63,7 @@ find_package(catkin REQUIRED COMPONENTS
  add_service_files(
    FILES
    Evolve.srv
+   RecordGeneration.srv
  )
 
 ## Generate actions in the 'action' folder
@@ -169,6 +170,7 @@ include_directories(
    scripts/flower.py
    scripts/environment_updater.py
    scripts/evolve_server.py
+   scripts/record_generation_server.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

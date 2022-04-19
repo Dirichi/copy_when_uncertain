@@ -12,7 +12,7 @@ NAME = "flower"
 class Flower():
 	def __init__(self, flower_id, reward_options, distribution, publisher, prob_reward_change):
 		self.id = flower_id
-		self.current_reward = 0
+		self.current_reward = 1
 		self.reward_options = [0, 1, 2]
 		self.reward_distribution = distribution
 		self.publisher = publisher
@@ -20,7 +20,7 @@ class Flower():
 		
 
 	def update(self, tick):
-		rospy.loginfo("Flower %s received tick %s", self.id, tick.data)
+		rospy.logdebug("Flower %s received tick %s", self.id, tick.data)
 		tick_id = tick.data
 		if (random.random() < self.prob_reward_change):
 			reward = np.random.choice(self.reward_options, 1, p=self.reward_distribution)
@@ -31,7 +31,7 @@ class Flower():
 				'current_reward': self.current_reward
 			}
 		if (tick_id % 100 == 0):
-			rospy.loginfo("Flower status update: %s", status)
+			rospy.logdebug("Flower status update: %s", status)
 
 		update = FlowerUpdate(**status)
 		self.publisher.publish(update)
@@ -43,7 +43,7 @@ def start_flower_node():
 	rospy.init_node(NAME, anonymous=True)
 	reward_options = [0, 1, 2]
 	flower_id = rospy.get_param("~flower_id")
-	rospy.loginfo("Starting flower node with id: %s", flower_id)
+	rospy.logdebug("Starting flower node with id: %s", flower_id)
 	reward_change_freq = rospy.get_param("~prob_reward_change")
 	prob_r0 = rospy.get_param("~prob_r0")
 	prob_r1 = rospy.get_param("~prob_r1")
