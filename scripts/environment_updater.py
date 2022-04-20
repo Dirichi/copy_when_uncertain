@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+import roslaunch
 import random
 from copy_when_uncertain.msg import BeeUpdate, FlowerUpdate, BeeAlive, FlowerAlive, ActionOutcome, ActionOutcomeProcessed
 from copy_when_uncertain.srv import Evolve, EvolveRequest, RecordGeneration, RecordGenerationRequest
@@ -16,6 +17,11 @@ OUTCOME_TOPIC = "outcomes"
 EXPLORE = 0
 EXPLOIT = 1
 OBSERVE = 2
+
+PACKAGE = "copy_when_uncertain"
+BEE_EXE = "bee.py"
+FLOWER_EXE = "flower.py"
+
 
 class ActionOutcomeCalculator():
 	def __init__(self, observation_noise_factor):
@@ -47,7 +53,8 @@ class ActionOutcomeCalculator():
 		received = (total / n_bees) if bee.action == EXPLOIT else 0
 		expected = received if bee.action == EXPLOIT else total / (n_bees + 1)
 		if bee.action == EXPLORE:
-			expected = self.add_observation_noise(expected)
+			#expected = self.add_observation_noise(expected)
+			pass
 
 		return {'expected': expected,'received': received}
 
@@ -89,7 +96,7 @@ class ActionOutcomeCalculator():
 
 	def assign_flower_if_missing(self, bee_update, flower_updates):
 		update = copy.deepcopy(bee_update)
-		if update.action == EXPLORE and update.target_flower_id == -1:
+		if update.action == EXPLOIT and update.target_flower_id == -1:
 			flower_id = random.sample(flower_updates.keys(), 1)[0]
 			update.target_flower_id = flower_id
 		return update
@@ -115,17 +122,32 @@ class EnvironmentUpdater():
 		self.bee_updates = {}
 		self.bee_ids = set([])
 		self.tick_id = 0
-		self.n_flowers = 3
-		self.n_bees = 5
-		self.outcome_calculator = ActionOutcomeCalculator(0.1)
+		self.n_flowers = 40
+		self.n_bees = 13
+		self.outcome_calculator = ActionOutcomeCalculator(observation_noise_factor=0)
 		self.processed_outcome_ids = set([])
 		self.tick_outcome_published = False
 		self.update_bees_published = False
 		self.tick_completed = False
 		self.max_ticks = max_ticks
+		self.child_processes = []
 	
+	def setup(self):
+		rospy.logdebug("Setup started")
+		launch = roslaunch.scriptapi.ROSLaunch()
+		launch.start()
+		self.start_bee_nodes(launch)
+		self.start_flower_nodes(launch)
+		rate = rospy.Rate(1)
+		while not self.all_objects_ready():
+			rate.sleep()
+
+		rospy.logdebug("Setup complete")
+
 	def tick(self, tick):
 		if (self.tick_id >= self.max_ticks):
+			for process in self.child_processes:
+				process.stop()
 			return
 
 		self.bee_updates = {}
@@ -230,7 +252,30 @@ class EnvironmentUpdater():
 		except rospy.ServiceException as e:
 			rospy.logerr("Record service call failed: %s", e)
 
+	
+	def start_bee_nodes(self, launch):
+		for i in range(self.n_bees):
+			bee_id = i + 1
+			node = roslaunch.core.Node(
+				PACKAGE, 
+				BEE_EXE,
+				namespace="/bees",
+				name="bee_" + str(bee_id),
+				args="_bee_id:=%s" % bee_id)
+			process = launch.launch(node)
+			self.child_processes.append(process)
 
+	def start_flower_nodes(self, launch):
+		for i in range(self.n_flowers):
+			flower_id = i + 1
+			node = roslaunch.core.Node(
+				PACKAGE, 
+				FLOWER_EXE, 
+				namespace="/flowers",
+				name="flower_" + str(flower_id),
+				args="_flower_id:=%s _prob_r0:=0.33 _prob_r1:=0.34 _prob_r2:=0.33 _prob_reward_change:=0.05" % flower_id)
+			process = launch.launch(node)
+			self.child_processes.append(process)
 
 def start_environment_node():
 	bee_pub = rospy.Publisher(UPDATE_BEES_TOPIC, Int64, queue_size=10, latch=True)
@@ -246,10 +291,7 @@ def start_environment_node():
 	rospy.Subscriber("/bees/outcome_processed", ActionOutcomeProcessed, env.receive_outcome_processed)
 	rospy.Subscriber(TICK_COMPLETED_TOPIC, Int64, env.tick)
 
-	rate = rospy.Rate(1)
-	while not env.all_objects_ready():
-		rate.sleep()
-
+	env.setup()
 	env.tick(Int64(0))
 	rospy.spin()
 

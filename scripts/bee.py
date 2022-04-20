@@ -94,6 +94,7 @@ def start_bee_node():
 	gene_length = 10
 	gene = [random.randint(0, 2) for i in range(gene_length)]
 	bee_id = rospy.get_param("~bee_id")
+	rospy.loginfo("Bee initialized with id: %s"%bee_id)
 	bee = Bee(bee_id, gene, pub, outcome_processed_pub)
 	rospy.Subscriber("/update_bees", Int64, bee.update)
 	rospy.Subscriber("/outcomes", ActionOutcome, bee.process_outcome)
