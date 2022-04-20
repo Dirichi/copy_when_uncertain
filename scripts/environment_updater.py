@@ -7,6 +7,7 @@ from copy_when_uncertain.msg import BeeUpdate, FlowerUpdate, BeeAlive, FlowerAli
 from copy_when_uncertain.srv import Evolve, EvolveRequest, RecordGeneration, RecordGenerationRequest
 from std_msgs.msg import Int64
 import copy
+import numpy as np
 
 NAME = "environment_updater"
 UPDATE_FLOWERS_TOPIC = "update_flowers"
@@ -111,7 +112,7 @@ class ActionOutcomeCalculator():
 		
 	
 class EnvironmentUpdater():
-	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq, max_ticks):
+	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq, max_ticks, rewards_mean, rewards_dev):
 		self.bee_publisher = bee_pub
 		self.flower_publisher = flower_pub
 		self.tick_completed_publisher = tick_completed_pub
@@ -122,8 +123,8 @@ class EnvironmentUpdater():
 		self.bee_updates = {}
 		self.bee_ids = set([])
 		self.tick_id = 0
-		self.n_flowers = 40
-		self.n_bees = 13
+		self.n_flowers = 3
+		self.n_bees = 5
 		self.outcome_calculator = ActionOutcomeCalculator(observation_noise_factor=0)
 		self.processed_outcome_ids = set([])
 		self.tick_outcome_published = False
@@ -131,6 +132,8 @@ class EnvironmentUpdater():
 		self.tick_completed = False
 		self.max_ticks = max_ticks
 		self.child_processes = []
+		self.rewards_mean = rewards_mean
+		self.rewards_dev = rewards_dev
 	
 	def setup(self):
 		rospy.logdebug("Setup started")
@@ -234,7 +237,10 @@ class EnvironmentUpdater():
 		rospy.wait_for_service('evolve')
 		try:
 			run_evolve = rospy.ServiceProxy('evolve', Evolve)
-			request = EvolveRequest(bee_updates=self.bee_updates.values(), tick_id=self.tick_id)
+			request = EvolveRequest(
+				bee_updates=self.bee_updates.values(), 
+				tick_id=self.tick_id,
+				next_generation_size=self.n_bees)
 			rospy.logdebug("Completed evolution process")
 			return run_evolve(request).bee_inits
 		except rospy.ServiceException as e:
@@ -266,14 +272,16 @@ class EnvironmentUpdater():
 			self.child_processes.append(process)
 
 	def start_flower_nodes(self, launch):
+		distribution = np.random.normal(self.rewards_mean, self.rewards_dev, self.n_flowers)
 		for i in range(self.n_flowers):
 			flower_id = i + 1
+			reward = distribution[i]
 			node = roslaunch.core.Node(
 				PACKAGE, 
 				FLOWER_EXE, 
 				namespace="/flowers",
 				name="flower_" + str(flower_id),
-				args="_flower_id:=%s _prob_r0:=0.33 _prob_r1:=0.34 _prob_r2:=0.33 _prob_reward_change:=0.05" % flower_id)
+				args="_flower_id:=%s _reward:=%s" % (flower_id, reward))
 			process = launch.launch(node)
 			self.child_processes.append(process)
 
@@ -283,7 +291,9 @@ def start_environment_node():
 	tick_pub = rospy.Publisher(TICK_COMPLETED_TOPIC, Int64, queue_size=10, latch=True)
 	outcome_pub = rospy.Publisher(OUTCOME_TOPIC, ActionOutcome, queue_size=10, latch=True)
 	rospy.init_node(NAME, anonymous=True)
-	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=100, max_ticks=10000)
+	rewards_mean = rospy.get_param("~rewards_mean")
+	rewards_dev = rospy.get_param("~rewards_dev")
+	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=100, max_ticks=10000, rewards_mean=rewards_mean, rewards_dev=rewards_dev)
 	rospy.Subscriber("/bees/bee_updated", BeeUpdate, env.receive_bee_update)
 	rospy.Subscriber("/flowers/flower_updated", FlowerUpdate, env.receive_flower_update)
 	rospy.Subscriber("/bees/bee_alive", BeeAlive, env.receive_bee_alive)

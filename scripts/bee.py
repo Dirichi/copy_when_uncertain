@@ -91,7 +91,7 @@ def start_bee_node():
 	pub = rospy.Publisher(BEE_UPDATE_TOPIC, BeeUpdate, queue_size=10)
 	outcome_processed_pub = rospy.Publisher(OUTCOME_PROCESSED_TOPIC, ActionOutcomeProcessed, queue_size=10)
 	rospy.init_node(NAME, anonymous=True)
-	gene_length = 10
+	gene_length = 20
 	gene = [random.randint(0, 2) for i in range(gene_length)]
 	bee_id = rospy.get_param("~bee_id")
 	rospy.loginfo("Bee initialized with id: %s"%bee_id)

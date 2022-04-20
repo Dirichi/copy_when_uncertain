@@ -1,4 +1,5 @@
 int64 tick_id
+int64 next_generation_size
 copy_when_uncertain/BeeUpdate[] bee_updates
 
 ---

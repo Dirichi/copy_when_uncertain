@@ -10,17 +10,16 @@ import copy
 NAME = "evolve_server"
 
 class EvolveServer():
-	def __init__(self, tournament_ratio, prob_recombination, gene_cardinality, prob_mutation):
+	def __init__(self, tournament_ratio, prob_recombination, gene_cardinality):
 		self.tournament_ratio = tournament_ratio
 		self.prob_recombination = prob_recombination
 		self.gene_cardinality = gene_cardinality
-		self.prob_mutation = prob_mutation
 
 	def handle_request(self, request):
 		rospy.logdebug("Handling evolve request at tick_id: %s", request.tick_id)
 		bees = request.bee_updates
 		self.log_progress(bees)
-		children = self.evolve(bees)
+		children = self.evolve(bees, request.next_generation_size)
 		new_generation = []
 		for i in range(len(bees)):
 			new_bee = self.build_bee(bees[i].bee_id, children[i])
@@ -29,13 +28,11 @@ class EvolveServer():
 		rospy.logdebug("Completed evolution. New generation: %s", new_generation)
 		return EvolveResponse(bee_inits=new_generation, tick_id=request.tick_id)
 
-	def evolve(self, population):
+	def evolve(self, population, next_generation_size):
 		parents = [self.tournament_selection(population) for _ in range(len(population))]
 		pairs = self.pair_up_parents(parents)
 		children_genes = [child for p1, p2 in pairs for child in self.cross_over(p1, p2)] 
-		if len(children_genes) > len(population):
-			children_genes.pop(random.randint(0, len(children_genes) - 1))
-
+		children_genes = random.sample(children_genes, next_generation_size)
 		return [self.mutate(child) for child in children_genes]
 
 	def fitness(self, individual):
@@ -70,7 +67,7 @@ class EvolveServer():
 	def mutate(self, gene):
 		gene_copy = gene[:]
 		for i in range(len(gene_copy)):
-			if random.random() < self.prob_mutation:
+			if random.random() < (1.0 / len(gene_copy)):
 				gene_copy[i] = random.randint(0, self.gene_cardinality - 1)
 		return gene_copy
 
@@ -84,7 +81,7 @@ class EvolveServer():
 
 
 def start_server():
-	server = EvolveServer(tournament_ratio=0.4, prob_recombination=0.9, gene_cardinality=3, prob_mutation=0.1)
+	server = EvolveServer(tournament_ratio=0.4, prob_recombination=0.9, gene_cardinality=3)
 	rospy.init_node(NAME)
 	rospy.Service("evolve", Evolve, server.handle_request)
 	rospy.logdebug("Ready to evolve bees")

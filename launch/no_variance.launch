@@ -1,7 +1,7 @@
 <launch>
 	<node pkg="copy_when_uncertain" type="environment_updater.py" name="environment_updater">
 		<param name="rewards_mean" value="8.3"/>
-		<param name="rewards_dev" value="3"/>
+		<param name="rewards_dev" value="0.001"/>
 	</node>
 	<node pkg="copy_when_uncertain" type="evolve_server.py" name="evolve_server"/>
 	<node pkg="copy_when_uncertain" type="record_generation_server.py" name="record_generation_server">
