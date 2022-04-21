@@ -25,7 +25,9 @@ class RecordGenerationServer():
 			rospy.logdebug("Writing to file: %s", self.filename)
 			row = self.build_row(request)
 			rospy.loginfo(row)
-			writer = csv.DictWriter(f, row.keys())
+			headers = row.keys()
+			headers.sort()
+			writer = csv.DictWriter(f, headers)
 			writer.writerow(row)
 
 		rospy.logdebug("Completed recording at tick_id: %s", request.tick_id)
@@ -58,8 +60,8 @@ class RecordGenerationServer():
 
 def start_server():
 	rospy.init_node(NAME)
-	#filename_suffix = re.sub(r'[\W_]+', '', str(datetime.now())) + '.csv'
-	filename = rospy.get_param("~filename_prefix") + ".csv"
+	filename_suffix = re.sub(r'[\W_]+', '', str(datetime.now())) + '.csv'
+	filename = rospy.get_param("~filename_prefix") + filename_suffix
 	server = RecordGenerationServer(filename)
 	rospy.Service("record_generation", RecordGeneration, server.handle_request)
 	rospy.loginfo("Ready to record generations of bees. Saving files to %s", filename)

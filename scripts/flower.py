@@ -42,7 +42,7 @@ def start_flower_node():
 	rospy.Subscriber("/update_flowers", Int64, flower.update)
 
 	alive_pub = rospy.Publisher("flower_alive", FlowerAlive, queue_size=10)
-	rate = rospy.Rate(1)
+	rate = rospy.Rate(10)
 	while not rospy.is_shutdown():
 		status = {'flower_id': flower.id}
 		alive_pub.publish(FlowerAlive(**status))

@@ -5,6 +5,6 @@
 	</node>
 	<node pkg="copy_when_uncertain" type="evolve_server.py" name="evolve_server"/>
 	<node pkg="copy_when_uncertain" type="record_generation_server.py" name="record_generation_server">
-		<param name="filename_prefix" value="high_variance"/>
+		<param name="filename_prefix" value="no_variance"/>
 	</node>
 </launch>         

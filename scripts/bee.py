@@ -29,7 +29,7 @@ class Bee():
 		self.num_ticks = 0
 		self.cumulative_reward = 0
 		self.gene_cursor = 0
-		self.expected_rewards_by_flower_id = {flower: 0.0 for flower in self.expected_rewards_by_flower_id}
+		self.expected_rewards_by_flower_id = {}
 		
 
 	def update(self, tick):
@@ -91,9 +91,9 @@ def start_bee_node():
 	pub = rospy.Publisher(BEE_UPDATE_TOPIC, BeeUpdate, queue_size=10)
 	outcome_processed_pub = rospy.Publisher(OUTCOME_PROCESSED_TOPIC, ActionOutcomeProcessed, queue_size=10)
 	rospy.init_node(NAME, anonymous=True)
-	gene_length = 20
-	gene = [random.randint(0, 2) for i in range(gene_length)]
 	bee_id = rospy.get_param("~bee_id")
+	gene_length = rospy.get_param("~gene_length")
+	gene = [random.randint(0, 2) for i in range(gene_length)]
 	rospy.loginfo("Bee initialized with id: %s"%bee_id)
 	bee = Bee(bee_id, gene, pub, outcome_processed_pub)
 	rospy.Subscriber("/update_bees", Int64, bee.update)

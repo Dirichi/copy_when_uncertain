@@ -25,25 +25,28 @@ FLOWER_EXE = "flower.py"
 
 
 class ActionOutcomeCalculator():
-	def __init__(self, observation_noise_factor):
+	def __init__(self, observation_noise_factor, prob_reset, max_bee_ticks):
 		self.observation_noise_factor = observation_noise_factor
+		self.prob_reset = prob_reset
+		self.max_bee_ticks = max_bee_ticks
 
 	def calculate(self, bees_by_id, flowers_by_id):
-		bees = [self.assign_flower_if_missing(bee, flowers_by_id) for bee in bees_by_id.values()]
-		exploiters = [bee for bee in bees if bee.action == EXPLOIT]
+		bees = bees_by_id.values()
+		exploiters = [bee for bee in bees if bee.action == EXPLOIT and bee.target_flower_id != -1]
 		flower_profiles = self.build_flower_profiles(flowers_by_id, exploiters)
 		return [self.build_outcome(bee, flower_profiles) for bee in bees]	
 
 	def build_outcome(self, bee, flower_profiles_by_id):
 		flower = self.select_target_flower(bee, flower_profiles_by_id)
 		rewards = self.build_reward(bee, flower) 
+		reset = (bee.num_ticks > self.max_bee_ticks) or random.random() < self.prob_reset
 		outcome = {
 			'tick_id': bee.tick_id,
 			'bee_id': bee.bee_id,
 			'received_reward': rewards['received'],
 			'observed_flower_id': flower['id'],
 			'observed_reward': rewards['expected'],
-			'reset': False,
+			'reset': reset,
 			'gene': []
 		}
 		return  ActionOutcome(**outcome)
@@ -51,9 +54,9 @@ class ActionOutcomeCalculator():
 	def build_reward(self, bee, flower):
 		total = float(flower['reward'])
 		n_bees = float(flower['n_bees'])
-		received = (total / n_bees) if bee.action == EXPLOIT else 0
+		received = (total / n_bees) if bee.action == EXPLOIT and bee.target_flower_id != -1 else 0
 		expected = received if bee.action == EXPLOIT else total / (n_bees + 1)
-		if bee.action == EXPLORE:
+		if bee.action == EXPLOIT:
 			#expected = self.add_observation_noise(expected)
 			pass
 
@@ -64,8 +67,11 @@ class ActionOutcomeCalculator():
 		if bee.action == EXPLORE:
 			return random.sample(flower_profiles, 1)[0]
 
-		if bee.action == EXPLOIT:
+		if bee.action == EXPLOIT and bee.target_flower_id != -1:
 			return flower_profiles_by_id[bee.target_flower_id]
+
+		if bee.action == EXPLOIT and bee.target_flower_id == -1:
+			return {'n_bees': 0, 'id': -1, 'reward': 0}
 
 		if bee.action == OBSERVE:
 			exploited_flowers = [f for f in flower_profiles if f['n_bees'] > 0]
@@ -95,13 +101,6 @@ class ActionOutcomeCalculator():
 				count_dict[update.target_flower_id] += 1
 		return count_dict
 
-	def assign_flower_if_missing(self, bee_update, flower_updates):
-		update = copy.deepcopy(bee_update)
-		if update.action == EXPLOIT and update.target_flower_id == -1:
-			flower_id = random.sample(flower_updates.keys(), 1)[0]
-			update.target_flower_id = flower_id
-		return update
-
 	def add_observation_noise(self, reward):
 		delta_factor = 0.0001
 		delta = random.random() * (2 * delta_factor) - delta_factor
@@ -112,7 +111,7 @@ class ActionOutcomeCalculator():
 		
 	
 class EnvironmentUpdater():
-	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq, max_ticks, rewards_mean, rewards_dev):
+	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq, max_ticks, rewards_mean, rewards_dev, gene_length):
 		self.bee_publisher = bee_pub
 		self.flower_publisher = flower_pub
 		self.tick_completed_publisher = tick_completed_pub
@@ -123,9 +122,10 @@ class EnvironmentUpdater():
 		self.bee_updates = {}
 		self.bee_ids = set([])
 		self.tick_id = 0
-		self.n_flowers = 3
-		self.n_bees = 5
-		self.outcome_calculator = ActionOutcomeCalculator(observation_noise_factor=0)
+		self.n_flowers = 30
+		self.n_bees = 10
+		self.outcome_calculator = ActionOutcomeCalculator(observation_noise_factor=0, prob_reset=0.05, max_bee_ticks=gene_length)
+		self.gene_length = gene_length
 		self.processed_outcome_ids = set([])
 		self.tick_outcome_published = False
 		self.update_bees_published = False
@@ -204,20 +204,20 @@ class EnvironmentUpdater():
 			self.outcome_publisher.publish(outcome)
 
 	def build_outcomes(self):
+		if (self.tick_id > 0 and (self.tick_id % self.evolution_frequency == 0)):
+			self.record_generation()
+
 		bees = copy.deepcopy(self.bee_updates)
 		flowers = copy.deepcopy(self.flower_updates)
 		outcomes = self.outcome_calculator.calculate(bees, flowers)
-		bee_inits_by_id = {}
-		if (self.tick_id > 0 and (self.tick_id % self.evolution_frequency == 0)):
-			self.record_generation()
-			bee_inits = self.evolve_bees()
-			for init in bee_inits:
-				bee_inits_by_id[init.bee_id] = init
+		dead_bees = [bee for bee in outcomes if bee.reset]
+		n_dead_bees = len(dead_bees)
+		if (n_dead_bees > 0):
+			bee_inits = self.evolve_bees(n_dead_bees)
 		
-		for outcome in outcomes:
-			bee_init = bee_inits_by_id.get(outcome.bee_id, None)
-			if bee_init:
-				outcome.reset = True
+			for i in range(n_dead_bees):
+				bee_init = bee_inits[i]
+				outcome = dead_bees[i]
 				outcome.gene = bee_init.gene
 		return outcomes
 
@@ -232,7 +232,7 @@ class EnvironmentUpdater():
 			rospy.logdebug("Tick: %s completed", self.tick_id)
 			self.tick_completed_publisher.publish(Int64(self.tick_id))
 
-	def evolve_bees(self):
+	def evolve_bees(self, num_bees):
 		rospy.logdebug("Beginning evolution process at tick_id: %s", self.tick_id)
 		rospy.wait_for_service('evolve')
 		try:
@@ -240,7 +240,7 @@ class EnvironmentUpdater():
 			request = EvolveRequest(
 				bee_updates=self.bee_updates.values(), 
 				tick_id=self.tick_id,
-				next_generation_size=self.n_bees)
+				next_generation_size=num_bees)
 			rospy.logdebug("Completed evolution process")
 			return run_evolve(request).bee_inits
 		except rospy.ServiceException as e:
@@ -267,7 +267,7 @@ class EnvironmentUpdater():
 				BEE_EXE,
 				namespace="/bees",
 				name="bee_" + str(bee_id),
-				args="_bee_id:=%s" % bee_id)
+				args="_bee_id:=%s _gene_length:=%s" % (bee_id, self.gene_length))
 			process = launch.launch(node)
 			self.child_processes.append(process)
 
@@ -293,7 +293,7 @@ def start_environment_node():
 	rospy.init_node(NAME, anonymous=True)
 	rewards_mean = rospy.get_param("~rewards_mean")
 	rewards_dev = rospy.get_param("~rewards_dev")
-	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=100, max_ticks=10000, rewards_mean=rewards_mean, rewards_dev=rewards_dev)
+	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=10, max_ticks=10000, rewards_mean=rewards_mean, rewards_dev=rewards_dev, gene_length=30)
 	rospy.Subscriber("/bees/bee_updated", BeeUpdate, env.receive_bee_update)
 	rospy.Subscriber("/flowers/flower_updated", FlowerUpdate, env.receive_flower_update)
 	rospy.Subscriber("/bees/bee_alive", BeeAlive, env.receive_bee_alive)

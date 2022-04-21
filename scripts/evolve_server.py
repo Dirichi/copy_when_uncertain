@@ -10,8 +10,8 @@ import copy
 NAME = "evolve_server"
 
 class EvolveServer():
-	def __init__(self, tournament_ratio, prob_recombination, gene_cardinality):
-		self.tournament_ratio = tournament_ratio
+	def __init__(self, tournament_size, prob_recombination, gene_cardinality):
+		self.tournament_size = tournament_size
 		self.prob_recombination = prob_recombination
 		self.gene_cardinality = gene_cardinality
 
@@ -20,11 +20,7 @@ class EvolveServer():
 		bees = request.bee_updates
 		self.log_progress(bees)
 		children = self.evolve(bees, request.next_generation_size)
-		new_generation = []
-		for i in range(len(bees)):
-			new_bee = self.build_bee(bees[i].bee_id, children[i])
-			new_generation.append(new_bee)
-		
+		new_generation = [BeeInit(gene=gene) for gene in children]
 		rospy.logdebug("Completed evolution. New generation: %s", new_generation)
 		return EvolveResponse(bee_inits=new_generation, tick_id=request.tick_id)
 
@@ -39,8 +35,7 @@ class EvolveServer():
 		return float(individual.total_reward) / individual.num_ticks
 
 	def tournament_selection(self, population):
-		tournament_size = int(self.tournament_ratio * len(population))
-		tournament_participants = random.sample(population, tournament_size)
+		tournament_participants = random.sample(population, self.tournament_size)
 		return max(tournament_participants, key=lambda p: self.fitness(p))
 
 
@@ -71,9 +66,6 @@ class EvolveServer():
 				gene_copy[i] = random.randint(0, self.gene_cardinality - 1)
 		return gene_copy
 
-	def build_bee(self, bee_id, gene):
-		return BeeInit(**{'bee_id': bee_id, 'gene': gene})
-		
 	def log_progress(self, bees):
 		fittest_bee = max(bees, key=lambda b: self.fitness(b))
 		rospy.logdebug("Fittest bee: %s", fittest_bee.gene)
@@ -81,7 +73,7 @@ class EvolveServer():
 
 
 def start_server():
-	server = EvolveServer(tournament_ratio=0.4, prob_recombination=0.9, gene_cardinality=3)
+	server = EvolveServer(tournament_size=3, prob_recombination=0.9, gene_cardinality=3)
 	rospy.init_node(NAME)
 	rospy.Service("evolve", Evolve, server.handle_request)
 	rospy.logdebug("Ready to evolve bees")
