@@ -42,6 +42,9 @@ class RecordGenerationServer():
 		fittest = max(request.bee_updates, key=lambda b: self.fitness(b))
 		all_genes = [g for bee in request.bee_updates for g in bee.gene]
 		fittest_gene = '-'.join([str(g) for g in fittest.gene])
+		avg_observe_index = float(sum([self.average_index(bee.gene, OBSERVE) for bee in request.bee_updates])) / len(request.bee_updates)
+		avg_explore_index = float(sum([self.average_index(bee.gene, EXPLORE) for bee in request.bee_updates])) / len(request.bee_updates)
+		avg_exploit_index = float(sum([self.average_index(bee.gene, EXPLOIT) for bee in request.bee_updates])) / len(request.bee_updates)
 		return {
 			'tick_id': request.tick_id,
 			'max_fitness': max(fitness_scores),
@@ -52,11 +55,21 @@ class RecordGenerationServer():
 			'avg_observe_ratio': self.ratio(all_genes, OBSERVE),
 			'fittest_explore_ratio': self.ratio(fittest.gene, EXPLORE),
 			'fittest_exploit_ratio': self.ratio(fittest.gene, EXPLOIT),
-			'fittest_observe_ratio': self.ratio(fittest.gene, OBSERVE)
+			'fittest_observe_ratio': self.ratio(fittest.gene, OBSERVE),
+			'fittest_avg_explore_index': self.average_index(fittest.gene, EXPLORE),
+			'fittest_avg_exploit_index': self.average_index(fittest.gene, EXPLOIT),
+			'fittest_avg_observe_index': self.average_index(fittest.gene, OBSERVE),
+			'avg_explore_index': avg_explore_index,
+			'avg_exploit_index': avg_exploit_index,
+			'avg_observe_index': avg_observe_index,
 		}	
 
 	def ratio(self, arr, val):
 		return float(len([v for v in arr if v == val])) / len(arr) 
+
+	def average_index(self, arr, val):
+		indexes = [i for i, x in enumerate(arr) if x == val]
+		return float(sum(indexes)) / len(indexes)
 
 def start_server():
 	rospy.init_node(NAME)

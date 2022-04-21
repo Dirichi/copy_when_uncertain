@@ -8,6 +8,7 @@ from copy_when_uncertain.srv import Evolve, EvolveRequest, RecordGeneration, Rec
 from std_msgs.msg import Int64
 import copy
 import numpy as np
+from scipy.stats import gamma
 
 NAME = "environment_updater"
 UPDATE_FLOWERS_TOPIC = "update_flowers"
@@ -111,7 +112,7 @@ class ActionOutcomeCalculator():
 		
 	
 class EnvironmentUpdater():
-	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq, max_ticks, rewards_mean, rewards_dev, gene_length):
+	def __init__(self, bee_pub, flower_pub, tick_completed_pub, outcome_pub, evolution_freq, max_ticks, rewards_shape, rewards_scale, gene_length):
 		self.bee_publisher = bee_pub
 		self.flower_publisher = flower_pub
 		self.tick_completed_publisher = tick_completed_pub
@@ -122,8 +123,8 @@ class EnvironmentUpdater():
 		self.bee_updates = {}
 		self.bee_ids = set([])
 		self.tick_id = 0
-		self.n_flowers = 30
-		self.n_bees = 10
+		self.n_flowers = 20
+		self.n_bees = 6
 		self.outcome_calculator = ActionOutcomeCalculator(observation_noise_factor=0, prob_reset=0.05, max_bee_ticks=gene_length)
 		self.gene_length = gene_length
 		self.processed_outcome_ids = set([])
@@ -132,8 +133,8 @@ class EnvironmentUpdater():
 		self.tick_completed = False
 		self.max_ticks = max_ticks
 		self.child_processes = []
-		self.rewards_mean = rewards_mean
-		self.rewards_dev = rewards_dev
+		self.rewards_shape = rewards_shape
+		self.rewards_scale = rewards_scale
 	
 	def setup(self):
 		rospy.logdebug("Setup started")
@@ -272,7 +273,7 @@ class EnvironmentUpdater():
 			self.child_processes.append(process)
 
 	def start_flower_nodes(self, launch):
-		distribution = np.random.normal(self.rewards_mean, self.rewards_dev, self.n_flowers)
+		distribution = gamma.rvs(self.rewards_shape, scale=self.rewards_scale, size=self.n_flowers)
 		for i in range(self.n_flowers):
 			flower_id = i + 1
 			reward = distribution[i]
@@ -291,9 +292,9 @@ def start_environment_node():
 	tick_pub = rospy.Publisher(TICK_COMPLETED_TOPIC, Int64, queue_size=10, latch=True)
 	outcome_pub = rospy.Publisher(OUTCOME_TOPIC, ActionOutcome, queue_size=10, latch=True)
 	rospy.init_node(NAME, anonymous=True)
-	rewards_mean = rospy.get_param("~rewards_mean")
-	rewards_dev = rospy.get_param("~rewards_dev")
-	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=10, max_ticks=10000, rewards_mean=rewards_mean, rewards_dev=rewards_dev, gene_length=30)
+	rewards_shape = rospy.get_param("~rewards_shape")
+	rewards_scale = rospy.get_param("~rewards_scale")
+	env = EnvironmentUpdater(bee_pub, flower_pub, tick_pub, outcome_pub, evolution_freq=10, max_ticks=10000, rewards_shape=rewards_shape, rewards_scale=rewards_scale, gene_length=20)
 	rospy.Subscriber("/bees/bee_updated", BeeUpdate, env.receive_bee_update)
 	rospy.Subscriber("/flowers/flower_updated", FlowerUpdate, env.receive_flower_update)
 	rospy.Subscriber("/bees/bee_alive", BeeAlive, env.receive_bee_alive)
